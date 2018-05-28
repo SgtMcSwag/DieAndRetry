@@ -10,7 +10,7 @@ using UnityEngine.UI;
 public class LevelTimer : MonoBehaviour
 {
     // Variable indiquant si le chrono est lancé
-    public bool timerOn = true;
+    public bool timerOn = false;
     // Texte affichant le timer
     public Text levelTimer;
 
@@ -37,12 +37,12 @@ public class LevelTimer : MonoBehaviour
             timer = Time.time - tempTime;
 
             // On arrondit le temps à la seconde précise
-            double second = System.Math.Floor(Time.time);
+            //double second = System.Math.Floor(Time.time);
             // Puis aux centiemes
-            double first = System.Math.Round(Time.time, 2);
+            //double first = System.Math.Round(Time.time, 2);
 
             // Afin de ne récupérer que les centiemes
-            centiemes = (first - second) * 100;
+            centiemes = /*(first - second) * 100;*/ (timer * 100) % 100;
 
             // On récupère les minutes
             minutes = (int)((timer) / 60f);

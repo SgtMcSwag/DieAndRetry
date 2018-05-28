@@ -11,6 +11,7 @@ public class LevelBestScore : MonoBehaviour
 {
 
     private float minutes, seconds, centiemes;
+    private int essais;
 
     // On récupère l'index du niveau actuel
     public int level;
@@ -18,18 +19,18 @@ public class LevelBestScore : MonoBehaviour
     public Text LevelBestScoreText;
     
     // On récupère le score enregistré dans des variables
-    void Start()
+    void OnGUI()
     {
         minutes = PlayerPrefs.GetFloat("MinutesFloor" + level);
         seconds = PlayerPrefs.GetFloat("SecondsFloor" + level);
         centiemes = PlayerPrefs.GetFloat("CentiemesFloor" + level);
-    }
 
-    // Si un score sur ce niveau est déjà enregistré, on l'affiche, et on affiche "/" sinon
-    void Update ()
-    {
+        essais = PlayerPrefs.GetInt("NbTriesFloor" + level);
+
+        // Si un score sur ce niveau est déjà enregistré, on l'affiche, et on affiche "/" sinon
         if (seconds != 0)
-            LevelBestScoreText.text = "Niveau" + level + " : " + minutes.ToString("00") + ":" + seconds.ToString("00") + ":" + centiemes.ToString("00");
+            LevelBestScoreText.text = "Niveau" + level + " : " + minutes.ToString("00") + ":" + seconds.ToString("00") + ":" + centiemes.ToString("00")
+                                    + " (Morts : " + essais + ")";
         else
             LevelBestScoreText.text = "Niveau" + level + " : /";
     }

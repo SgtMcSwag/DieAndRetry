@@ -6,16 +6,28 @@ using UnityEngine.SceneManagement;
 
 /**
  * Classe gérant les contrôles et autres aspects du joueur
- */ 
+ */
 
-public class PlayerControls : MonoBehaviour {
+public class PlayerControls : MonoBehaviour
+{
 
     // Variables d'état du joueur
     private bool isReady;
-    private bool isGrounded;
-    private bool hasJumped;
-    private bool doubleJumpReady;
+    private bool isGrounded = false;
+    private bool hasJumped = false;
+    private bool doubleJumpReady = false;
     private bool isDead = false;
+    private bool facingRight = true;
+    private bool wallJumpingR = false;
+    private bool wallJumpingL = false;
+
+    // Variable indiquant que le personnage slide contre un mur
+    public bool wallSliding;
+
+    // Références portant sur le contact avec un mur
+    public Transform wallCheckPoint;
+    public bool wallCheck;
+    public LayerMask wallLayerMask;
 
     // Valeur de l'index de la scène actuelle
     private int currentScene;
@@ -25,6 +37,10 @@ public class PlayerControls : MonoBehaviour {
     public KeyCode moveRight;
     public KeyCode jump;
     public KeyCode down;
+
+    // Variable permettant le "drag" horizontal du personnage
+    private float drag = 0.3f;
+
     // Vitesse du joueur
     public float speed = 10.0f;
     // Vitesse de descente du joueur
@@ -32,11 +48,9 @@ public class PlayerControls : MonoBehaviour {
     // Les différents objets nécessaires
     private Rigidbody2D rb2d;
     private GameManager gameManager;
-    public Text levelTimerText;
-    public Text totalTimerText;
+    public GameObject player;
 
-    private LevelTimer levelTimer;
-    private TotalTimer totalTimer;
+    private Timer timers;
 
     GameObject HUD;
 
@@ -57,14 +71,14 @@ public class PlayerControls : MonoBehaviour {
         // Son état passe à "mort"
         isDead = true;
         // On appelle la fonction "PlayerDies()" du HUD
-        HUD.SendMessage("PlayerDies", 0.5f, SendMessageOptions.RequireReceiver);
+        HUD.SendMessage("PlayerDies", 0.5f, SendMessageOptions.RequireReceiver);     
     }
 
     // Fonction reinitialisant le personnage
     public void ResetCharacter()
     {
         // On réinitialise les états du joueur
-        transform.position = Vector2.down;
+        transform.position = Vector2.down;      
         isGrounded = false;
         hasJumped = false;
         doubleJumpReady = false;
@@ -79,6 +93,10 @@ public class PlayerControls : MonoBehaviour {
     {
         // Le personnage est prêt à être déplacé
         isReady = true;
+
+        // Et active les deux timers
+        timers.timerOn = true;
+
         // On empêche le personnage de tourner sur lui-même et on autorise les déplacements
         rb2d.constraints = RigidbodyConstraints2D.None;
         rb2d.constraints = RigidbodyConstraints2D.FreezeRotation;
@@ -90,10 +108,6 @@ public class PlayerControls : MonoBehaviour {
         // On appelle les fonctions précédemment décrites
         ResetCharacter();
         Ready();
-        Invoke("Ready",  1);
-
-        // On réinitialise le timer du niveau
-        levelTimer.timerOn = true;
     }
 
     // Fonction réinitialisant la partie
@@ -101,18 +115,18 @@ public class PlayerControls : MonoBehaviour {
     {
         // On recommence la partie
         Restart();
-        // Et on réinitialise le nombre de vies du joueur
-        HUD.SendMessage("SetLives", 10);
+        // Et on réinitialise le nombre de tentatives du joueur
+        PlayerPrefs.SetInt("NbTotalTries", 0);
     }
-    
-    void Start ()
+
+    void Start()
     {
         // On initialise les objets nécessaires
         rb2d = GetComponent<Rigidbody2D>();
         HUD = GameObject.FindGameObjectWithTag("HUD");
-        levelTimer = levelTimerText.GetComponent<LevelTimer>();
-        totalTimer = totalTimerText.GetComponent<TotalTimer>();
+        timers = player.GetComponent<Timer>();
         jumpSound = GetComponent<AudioSource>();
+
         // On empêche le son de saut d'être joué au démarrage
         jumpSound.playOnAwake = false;
 
@@ -125,16 +139,11 @@ public class PlayerControls : MonoBehaviour {
         jump = (KeyCode)System.Enum.Parse(typeof(KeyCode), PlayerPrefs.GetString("jumpKey", "Z"));
         down = (KeyCode)System.Enum.Parse(typeof(KeyCode), PlayerPrefs.GetString("downKey", "S"));
 
-        // Après une seconde, on autorise le déplacement du personnage
-        Invoke("Ready", 1);
-        // Et on réinitialise le timer du niveau
-        totalTimer.ResetTimer();
-
-        // On active le timer
-        levelTimer.timerOn = true;
-
         // On récupère l'objet gérant la partie
         gameManager = GameObject.FindObjectOfType<GameManager>();
+
+        // Après une seconde, on autorise le déplacement du personnage
+        StartCoroutine(WaitForReady());
     }
 
     public void OnGUI()
@@ -143,22 +152,26 @@ public class PlayerControls : MonoBehaviour {
         if (isDead)
         {
             GUI.contentColor = Color.red;
-            GUI.Label(new Rect(Screen.width / 2, Screen.height / 2, 200f, 200f), "VOUS ETES MORT MAMENE");
+            GUI.Label(new Rect(Screen.width / 2, Screen.height / 2, 200f, 200f), "VOUS ETES MORT");
         }
     }
-    
-    void Update () {
+
+    void Update()
+    {
+
         // On récupère le volume des effets du jeu pour celui du saut
         jumpSound.volume = PlayerPrefs.GetFloat("EffectVolume");
 
         // Si le personnage n'est pas mort et est prêt à être déplacé
         if (!isDead && isReady)
         {
-            var vel = rb2d.velocity;
-            // Si on appuie sur le bouton de saut et que le personnage est à terre
-            if (Input.GetKey(jump) && isGrounded)
+            this.vect = rb2d.velocity;
+
+            // On gère les déplacements selon le bouton pressé et si le personnage est en train de wall jump
+
+            if (Input.GetKey(jump) && isGrounded && !wallSliding)
             {
-                vel.y = speed;
+                vect.y = speed;
                 // Le personnage n'est plus à terre
                 isGrounded = false;
                 // Le personnage a sauté une fois
@@ -166,35 +179,35 @@ public class PlayerControls : MonoBehaviour {
                 // On lance le son de saut
                 jumpSound.Play();
             }
-            // Si on appuit sur le bouton de saut alors que le personnage n'est pas à terre et est prêt pour le second saut
-            else if (Input.GetKey(jump) && doubleJumpReady && !isGrounded)
+            // Si on appuie sur le bouton de saut alors que le personnage n'est pas à terre et est prêt pour le second saut
+            else if (Input.GetKey(jump) && doubleJumpReady && !isGrounded && !wallSliding)
             {
-                vel.y = speed;
+                vect.y = speed;
                 // Le personnage ne peut plus sauter
                 doubleJumpReady = false;
             }
             // On gère ensuite les déplacements selon le bouton pressé
             else if (Input.GetKey(down))
             {
-                vel.y = -speed;
+                vect.y = -speed;
             }
             else if (Input.GetKey(moveLeft) && Input.GetKey(moveRight))
             {
-                vel.x = 0f;
+                vect.x = 0f;
             }
-            else if (Input.GetKey(moveLeft))
+            else if (Input.GetKey(moveLeft) && !wallJumpingL)
             {
-                vel.x = -speed;
+                vect.x = -speed;
             }
-            else if (Input.GetKey(moveRight))
+            else if (Input.GetKey(moveRight) && !wallJumpingR)
             {
-                vel.x = speed;
+                vect.x = speed;
             }
             else if (!Input.anyKey)
             {
-                vel.x = 0;
+                vect.x = 0;
             }
-            rb2d.velocity = vel;
+            rb2d.velocity = vect;
 
             // Si le personnage a sauté une fois
             if (hasJumped)
@@ -207,16 +220,150 @@ public class PlayerControls : MonoBehaviour {
                     hasJumped = false;
                 }
             }
-            // On applique les déplacements au personnage
-            var pos = transform.position;
-            transform.position = pos;
         }
         // Sinon, on bloque les mouvements du personnage et on réinitialise le timer du niveau
         else
         {
+            // On bloque la position du personnage
             rb2d.constraints = RigidbodyConstraints2D.FreezeAll;
-            
-            levelTimer.ResetTimer();
+
+            //timers.ResetLevelTimer(Time.time);
+            timers.timerOn = false;
         }
+
+        // Si le personnage n'est pas au sol
+        if (!isGrounded)
+        {
+            // On vérifie si le joueur est contre un mur
+            wallCheck = Physics2D.OverlapCircle(wallCheckPoint.position, 0.25f, wallLayerMask);
+
+            // Si le joueur se déplace dans le même sens que le mur
+            if ((facingRight && Input.GetKey(moveRight)) || (!facingRight && Input.GetKey(moveLeft)))
+            {
+                if (wallCheck)
+                {
+                    // Alors il slide
+                    wallSliding = true;
+                }
+            }
+        }
+
+        // Si le joueur est au sol ou n'est pas contre un mur
+        if (!wallCheck || isGrounded)
+            // Alors il ne slide pas
+            wallSliding = false;
+    }
+
+    // Fonction appliquant un drag horizontal après chaque frame et gérant les sauts
+    private void FixedUpdate()
+    {
+        // On applique les déplacements si on ne slide pas
+        if (!wallSliding)
+        {
+
+            // On change la direction dans laquelle 
+            if (vect.x < 0)
+            {
+                facingRight = false;
+            }
+            else
+            {
+                facingRight = true;
+            }
+            // On change l'orientation du sprite du personnage selon la direction dans laquelle il se déplace
+            Flip();
+            // On applique le déplacement du personnage
+            rb2d.velocity = vect;
+        }
+        else
+        {
+            // On gère le "wall slide"
+            HandleWallSliding();
+        }
+
+
+
+        // On applique un drag horizontal
+        var vel = rb2d.velocity;
+        vel.x *= 1.0f - drag;
+        rb2d.velocity = vel;
+    }
+
+    // Fonction gérant le sliding du personnage contre un mur
+    void HandleWallSliding()
+    {
+        // On réduit la vitesse de chute du personnage
+        rb2d.velocity = new Vector2(rb2d.velocity.x, -speed / 8);
+
+        // Si le joueur saute alors qu'il slide
+        if (Input.GetKey(jump))
+        {
+            // On vérifie dans quel sens le mur se trouve et on oriente le saut dans le sens opposé
+            if (facingRight)
+            {
+                rb2d.AddForce(new Vector2(-500, speed));
+                rb2d.velocity = new Vector3(rb2d.velocity.x, 10f, rb2d.velocity.y);
+
+                // On indique que le personnage wall jump afin de modifier les possibilités de déplacement en conséquence
+                wallJumpingR = true;
+                Invoke("WallJumpR", 0.3f);
+            }
+            else
+            {
+                rb2d.AddForce(new Vector2(500, speed));
+                rb2d.velocity = new Vector3(rb2d.velocity.x, 10f, rb2d.velocity.y);
+
+                wallJumpingL = true;
+                Invoke("WallJumpL", 0.3f);
+            }
+        }
+    }
+
+    // Fonction permettant de retourner le sprite du personnage
+    private void Flip()
+    {
+        // On récupère le scale du personnage
+        Vector3 theScale = transform.localScale;
+
+        // Selon la direction dans laquelle il regarde, on retourne le personnage dans le bon sens
+        if (facingRight)
+        {
+            theScale.x = 1;
+        }
+        else
+        {
+            theScale.x = -1;
+        }
+
+        // Et on applique la modification
+        transform.localScale = theScale;
+    }
+
+    // Fonctions à appeler avec Invoke() permettant de rétablir les déplacements après un wall jump
+    void WallJumpR()
+    {
+        wallJumpingR = false;
+    }
+
+    void WallJumpL()
+    {
+        wallJumpingL = false;
+    }
+
+    // Co-routine permettant de préparer le début d'un niveau
+    IEnumerator WaitForReady()
+    {
+        yield return new WaitForSeconds(1);
+        Ready();
+
+        // Et on réinitialise les timers
+        if (currentScene == 1)
+            timers.ResetTotalTimer(Time.time);
+
+        // On reset le timer du niveau
+        timers.ResetLevelTimer(Time.time);
+
+        // Et active les deux timers
+        timers.timerOn = true;
     }
 }

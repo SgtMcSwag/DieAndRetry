@@ -10,21 +10,23 @@ using UnityEngine.UI;
 public class BestScore : MonoBehaviour {
 
     private float minutes, seconds, centiemes;
+    private int essais;
 
     // Texte à modifier
     public Text totalScoreText;
 
 	// On récupère le meilleur temps dans des variables
-	void Start () {
+	void OnGUI () {
         minutes = PlayerPrefs.GetFloat("MinutesTotal");
         seconds = PlayerPrefs.GetFloat("SecondsTotal");
         centiemes = PlayerPrefs.GetFloat("CentiemesTotal");
-    }
-	
-	// Si un meilleur temps est enregistré, on l'afficher. Sinon, on affiche "/" à la place
-	void Update () {
+
+        essais = PlayerPrefs.GetInt("NbTotalTries");
+
+        // Si un temps est enregistré, on l'affiche. Sinon, on affiche "/" à la place
         if (seconds != 0)
-            totalScoreText.text = "Temps Total : " + minutes.ToString("00") + ":" + seconds.ToString("00") + ":" + centiemes.ToString("00");
+            totalScoreText.text = "Temps Total : " + minutes.ToString("00") + ":" + seconds.ToString("00") + ":" + centiemes.ToString("00")
+                                + " (Morts : " + essais + ")";
         else
             totalScoreText.text = "Temps Total : /";
     }

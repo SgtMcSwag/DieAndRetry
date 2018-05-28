@@ -10,20 +10,26 @@ using UnityEngine.UI;
 
 public class EndScript : MonoBehaviour {
 
+    // Variable indiquant si le jeu est terminé
+    public bool endGame = false;
+
     // L'index de la scene actuelle
     private int currentScene;
-    // Le nombre de vies restantes au joueur
-    private int nbLives;
+
+    // Le nombre de tentatives du joueur
+    private int nbTries;
+
+    // Le nombre de tentatives du joueur sur le niveau actuel
+    private int levelNbTries;
 
     // On récupère les différents objets nécessaires
     private GameObject hud;
     GameManager gameManager;
 
-    private LevelTimer levelTimer;
-    private TotalTimer totalTimer;
+    public GameObject player;
+    private Rigidbody2D rb2d;
 
-    public Text levelTimerText;
-    public Text totalTimerText;
+    private Timer timers;
 
     private AudioSource finishSound;
 
@@ -32,18 +38,18 @@ public class EndScript : MonoBehaviour {
     {
         if (col.gameObject.name == "Player")
         {
+            // On freeze le jeu au contact du drapeau
+            FreezeGame();
+
             // On lance le son de fin de niveau
             finishSound.Play();
 
-            // On récupère le nombre de vies
-            nbLives = gameManager.PlayerLives;
-
-            // On enregistre le niveau suivant et le nombre de vies restantes
-            PlayerPrefs.SetInt("CurrentLevel", currentScene + 1);
-            PlayerPrefs.SetInt("NbLives", nbLives);
+            // On récupère le nombre de tentatives
+            nbTries = gameManager.PlayerTries;
+            levelNbTries = gameManager.LevelPlayerTries;
 
             // On met à jour les meilleurs scores
-            updateScore();
+            UpdateScore();
             
             // On charge le prochain niveau après 2 secondes
             Invoke("LoadNextLevel", 2);
@@ -55,10 +61,11 @@ public class EndScript : MonoBehaviour {
         currentScene = SceneManager.GetActiveScene().buildIndex;
         hud = GameObject.Find("HUD");
         gameManager = hud.GetComponent<GameManager>();
-        levelTimer = levelTimerText.GetComponent<LevelTimer>();
-        totalTimer = totalTimerText.GetComponent<TotalTimer>();
+        timers = player.GetComponent<Timer>();
+        rb2d = player.GetComponent<Rigidbody2D>();
 
         finishSound = GetComponent<AudioSource>();
+
         // On empêche le son de fin de niveau d'être joué à l'initialisation
         finishSound.playOnAwake = false;
     }
@@ -69,62 +76,86 @@ public class EndScript : MonoBehaviour {
     }
 
     // Fonction permettant de mettre à jour le meilleur score si celui-ci est meilleur que le dernier
-    void updateScore()
+    void UpdateScore()
     {
+        // On enregistre le temps total actuel afin de continuer de l'augmenter au prochain niveau
+        PlayerPrefs.SetFloat("TempsTotalActuel", timers.totalTemps);
+
+        // On enregistre aussi le nombre d'essais du joueur avec de le récupérer au prochain niveau
+        PlayerPrefs.SetInt("NbTotalTries", nbTries);
+
         // Si aucun score n'est enregistré, on enregistre l'actuel
         if (PlayerPrefs.GetFloat("MinutesFloor" + currentScene) == 0 && PlayerPrefs.GetFloat("SecondsFloor" + currentScene) == 0 && PlayerPrefs.GetFloat("CentiemesFloor" + currentScene) == 0)
         {
-            PlayerPrefs.SetFloat("MinutesFloor" + currentScene, levelTimer.minutes);
-            PlayerPrefs.SetFloat("SecondsFloor" + currentScene, levelTimer.seconds);
-            PlayerPrefs.SetFloat("CentiemesFloor" + currentScene, (float)levelTimer.centiemes);
+            PlayerPrefs.SetFloat("MinutesFloor" + currentScene, timers.lMinutes);
+            PlayerPrefs.SetFloat("SecondsFloor" + currentScene, timers.lSeconds);
+            PlayerPrefs.SetFloat("CentiemesFloor" + currentScene, (float)timers.lCentiemes);
+
+            // Et le nombre de tentatives du niveau actuel
+            PlayerPrefs.SetInt("NbTriesFloor" + currentScene, levelNbTries);
         }
         // Sinon, on vérifie que le score actuel est meilleur que celui qui est déjà enregistré, puis on l'enregistre
-        else if (levelTimer.minutes <= PlayerPrefs.GetFloat("MinutesFloor" + currentScene))
+        else if (timers.lMinutes <= PlayerPrefs.GetFloat("MinutesFloor" + currentScene))
         {
-            if (levelTimer.seconds == PlayerPrefs.GetFloat("SecondsFloor" + currentScene))
+            if (timers.lSeconds == PlayerPrefs.GetFloat("SecondsFloor" + currentScene))
             {
-                if ((float)levelTimer.centiemes <= PlayerPrefs.GetFloat("CentiemesFloor" + currentScene))
+                if ((float)timers.lCentiemes <= PlayerPrefs.GetFloat("CentiemesFloor" + currentScene))
                 {
-                    PlayerPrefs.SetFloat("MinutesFloor" + currentScene, levelTimer.minutes);
-                    PlayerPrefs.SetFloat("SecondsFloor" + currentScene, levelTimer.seconds);
-                    PlayerPrefs.SetFloat("CentiemesFloor" + currentScene, (float)levelTimer.centiemes);
+                    PlayerPrefs.SetFloat("MinutesFloor" + currentScene, timers.lMinutes);
+                    PlayerPrefs.SetFloat("SecondsFloor" + currentScene, timers.lSeconds);
+                    PlayerPrefs.SetFloat("CentiemesFloor" + currentScene, (float)timers.lCentiemes);
+
+                    // Et le nombre de tentatives du niveau actuel
+                    PlayerPrefs.SetInt("NbTriesFloor" + currentScene, levelNbTries);
                 }
             }
-            else if (levelTimer.seconds < PlayerPrefs.GetFloat("SecondsFloor" + currentScene))
+            else if (timers.lSeconds < PlayerPrefs.GetFloat("SecondsFloor" + currentScene))
             {
-                PlayerPrefs.SetFloat("MinutesFloor" + currentScene, levelTimer.minutes);
-                PlayerPrefs.SetFloat("SecondsFloor" + currentScene, levelTimer.seconds);
-                PlayerPrefs.SetFloat("CentiemesFloor" + currentScene, (float)levelTimer.centiemes);
+                PlayerPrefs.SetFloat("MinutesFloor" + currentScene, timers.lMinutes);
+                PlayerPrefs.SetFloat("SecondsFloor" + currentScene, timers.lSeconds);
+                PlayerPrefs.SetFloat("CentiemesFloor" + currentScene, (float)timers.lCentiemes);
+
+                // Et le nombre de tentatives du niveau actuel
+                PlayerPrefs.SetInt("NbTriesFloor" + currentScene, levelNbTries);
             }
         }
         
         // On vérifie qu'il s'agit du dernier niveau
-        if (currentScene == 2)
+        if (currentScene == 4)
         {
             // Si oui, on vérifie si aucun temps total n'est enregistré, si oui on enregistre l'actuel
             if (PlayerPrefs.GetFloat("MinutesTotal") == 0 && PlayerPrefs.GetFloat("SecondsTotal") == 0 && PlayerPrefs.GetFloat("CentiemesTotal") == 0)
             {
-                PlayerPrefs.SetFloat("MinutesTotal", totalTimer.minutes);
-                PlayerPrefs.SetFloat("SecondsTotal", totalTimer.seconds);
-                PlayerPrefs.SetFloat("CentiemesTotal", (float)totalTimer.centiemes);
+                PlayerPrefs.SetFloat("MinutesTotal", timers.tMinutes);
+                PlayerPrefs.SetFloat("SecondsTotal", timers.tSeconds);
+                PlayerPrefs.SetFloat("CentiemesTotal", (float)timers.tCentiemes);
+
+                // On enregistre le nombre de tentatives totales
+                PlayerPrefs.SetInt("NbTotalTries", nbTries);
             }
             // Si non, on vérifie que le temps total est meilleur que celui déjà enregistré et on l'enregistre
-            else if (totalTimer.minutes <= PlayerPrefs.GetFloat("MinutesTotal"))
+            else if (timers.tMinutes <= PlayerPrefs.GetFloat("MinutesTotal"))
             {
-                if (totalTimer.seconds == PlayerPrefs.GetFloat("SecondsTotal"))
+                if (timers.tSeconds == PlayerPrefs.GetFloat("SecondsTotal"))
                 {
-                    if ((float)totalTimer.centiemes <= PlayerPrefs.GetFloat("CentiemesTotal"))
+                    if ((float)timers.tCentiemes <= PlayerPrefs.GetFloat("CentiemesTotal"))
                     {
-                        PlayerPrefs.SetFloat("MinutesTotal", totalTimer.minutes);
-                        PlayerPrefs.SetFloat("SecondsTotal", totalTimer.seconds);
-                        PlayerPrefs.SetFloat("CentiemesTotal", (float)totalTimer.centiemes);
+                        PlayerPrefs.SetFloat("MinutesTotal", timers.tMinutes);
+                        PlayerPrefs.SetFloat("SecondsTotal", timers.tSeconds);
+                        PlayerPrefs.SetFloat("CentiemesTotal", (float)timers.tCentiemes);
+
+                        // On enregistre le nombre de tentatives totales
+                        PlayerPrefs.SetInt("NbTotalTries", nbTries);
                     }
                 }
-                else if (totalTimer.seconds < PlayerPrefs.GetFloat("SecondsTotal"))
+                else if (timers.tSeconds < PlayerPrefs.GetFloat("SecondsTotal"))
                 {
-                    PlayerPrefs.SetFloat("MinutesTotal", totalTimer.minutes);
-                    PlayerPrefs.SetFloat("SecondsTotal", totalTimer.seconds);
-                    PlayerPrefs.SetFloat("CentiemesTotal", (float)totalTimer.centiemes);
+                    PlayerPrefs.SetFloat("MinutesTotal", timers.tMinutes);
+                    PlayerPrefs.SetFloat("SecondsTotal", timers.tSeconds);
+                    PlayerPrefs.SetFloat("CentiemesTotal", (float)timers.tCentiemes);
+
+                    // On enregistre le nombre de tentatives totales
+                    PlayerPrefs.SetInt("NbTotalTries", nbTries);
                 }
             }
         }
@@ -133,6 +164,23 @@ public class EndScript : MonoBehaviour {
     // Fonction permettant de charger le niveau suivant
     private void LoadNextLevel()
     {
-        SceneManager.LoadScene(currentScene + 1);
+        // Si il s'agit du dernier niveau, on load le menu
+        if (currentScene == 4)
+        {
+            // On affiche un bouton de fin à partir du GameManager
+            endGame = true;
+        }
+        else
+            SceneManager.LoadScene(currentScene + 1);
+    }
+
+    // Fonction qui bloque les mouvements du personnage et arrête les timers
+    private void FreezeGame ()
+    {
+        rb2d.constraints = RigidbodyConstraints2D.FreezeAll;
+        
+        timers.timerOn = false;
     }
 }
+
+

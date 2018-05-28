@@ -8,24 +8,30 @@ using UnityEngine.SceneManagement;
  * Classe gérant l'ensemble du fonctionnement du jeu
  */
 
-public class GameManager : MonoBehaviour {
+public class GameManager : MonoBehaviour
+{
 
     // Variable indiquant si le joueur est mort
     private bool playerDead = false;
 
-    // Nombre de vies du joueur
-    public int PlayerLives = 10;
+    // Nombre de tentatives du joueur
+    public int PlayerTries;
+    public int LevelPlayerTries;
+
     // Touche permettant de recommencer après être mort
     public KeyCode restart;
 
     // Index de la scene actuelle
-    private int currentScene;
+    public int currentScene;
 
     // Les objets nécessaires
-    public Text totalTimerText;
-    private TotalTimer totalTimer;
+    private Timer timers;
     public GUISkin layout;
     GameObject Player;
+
+    public GameObject finishFlag;
+    private EndScript endScript;
+
 
     // Fonction passant le joueur à l'état "mort"
     public void PlayerDies()
@@ -39,67 +45,74 @@ public class GameManager : MonoBehaviour {
         playerDead = false;
     }
 
-    // Fonction diminuant le nombre de vies du joueur
-    public void LoseLife ()
+    // Fonction diminuant le nombre de tentatives du joueur
+    public void Tried()
     {
-        PlayerLives--;
+        PlayerTries++;
+        LevelPlayerTries++;
     }
 
-    // Fonction modifiant le nombre de vies du joueur
-    public void SetLives (int lives)
+    // Fonction modifiant le nombre de tentatives du joueur
+    public void SetTries(int tries)
     {
-        PlayerLives = lives;
+        PlayerTries = tries;
     }
 
     // Fonction gérant les affichages à l'écran
     private void OnGUI()
     {
         GUI.skin = layout;
-        // On affiche le nombre de vies restantes du joueur
-        GUI.Label(new Rect(Screen.width / 2 - 150 - 12, 20, 100, 100), "Lives : " + PlayerLives);
-        
+        GUI.contentColor = Color.red;
+        // On affiche le nombre de tentatives du joueur
+        GUI.Label(new Rect(Screen.width / 2 - 150 - 12, 20, 100, 100), "Tentatives : " + PlayerTries);
+        GUI.Label(new Rect(Screen.width / 2 - 240, 40, 170, 100), "Tentatives sur le niveau : " + LevelPlayerTries);
+
         // Si le joueur est mort
-        if (playerDead)
+        if (playerDead && !endScript.endGame)
         {
-            // Et qu'il n'a plus de vies restantes
-            if (PlayerLives == 0)
+            // On affiche un bouton "RETRY" qui, si il est cliqué :
+            if (GUI.Button(new Rect(Screen.width / 2 - 60, 35, 120, 53), "RETRY") || (Input.GetKey(restart)))
             {
-                // On affiche un bouton "RESTART" qui, si il est cliqué : 
-                if (GUI.Button(new Rect(Screen.width / 2 - 60, 35, 120, 53), "RESTART"))
-                {
-                    // Si il ne s'agit pas du premier niveau, on repart sur celui-ci
-                    if (currentScene != 1)
-                    {
-                        SceneManager.LoadScene(1);
-                    }
-                    // On réinitialise la partie
-                    Player.SendMessage("ReinitGame", 0.5f, SendMessageOptions.RequireReceiver);
-                    // Et on réinitialise le chrono
-                    totalTimer.ResetTimer();
-                }
-            }
-            // Si le joueur à encore des vies restantes
-            else
-            {
-                // On affiche un bouton "RETRY" qui, si il est cliqué :
-                if (GUI.Button(new Rect(Screen.width / 2 - 60, 35, 120, 53), "RETRY") || (Input.GetKey(restart)))
-                {
-                    // On relance la partie
-                    Player.SendMessage("Restart", 0.5f, SendMessageOptions.RequireReceiver);
-                    // Le joueur perd une vie
-                    LoseLife();
-                }
+                // On relance la partie
+                Player.SendMessage("Restart", 0.5f, SendMessageOptions.RequireReceiver);
+                // Le joueur gagne une "tentative"
+                Tried();
             }
         }
+        // Si le joueur a terminé tous les niveaux
+        if (endScript.endGame)
+        {
+            if (GUI.Button(new Rect(Screen.width / 2 - 60, 60, 130, 53), "FELICITATIONS") || (Input.GetKey(restart)))
+            {
+                // On retourne au menu
+                SceneManager.LoadScene(0);
+            }
+        }
+
+        
     }
-    
-    void Start () {
+
+    void Start()
+    {
         // On initialise les objets nécessaires
         currentScene = SceneManager.GetActiveScene().buildIndex;
         Player = GameObject.FindGameObjectWithTag("Player");
-        totalTimer = totalTimerText.GetComponent<TotalTimer>();
+        timers = Player.GetComponent<Timer>();
+        endScript = finishFlag.GetComponent<EndScript>();
 
         // On récupère dans les préférences la touche permettant de recommencer
         restart = (KeyCode)System.Enum.Parse(typeof(KeyCode), PlayerPrefs.GetString("respawnKey", "Space"));
+
+        // On initialise le nombre d'essais du joueur à 0 si il s'agit du premier niveau
+        if (currentScene == 1)
+        {
+            PlayerTries = 0;
+            PlayerPrefs.SetInt("NbTotalTries", PlayerTries);
+        }
+        else
+            PlayerTries = PlayerPrefs.GetInt("NbTotalTries");
+
+        // Et on initialise toujours le nombre d'essais du joueur pour le niveau actuel à 0
+        LevelPlayerTries = 0;
     }
 }

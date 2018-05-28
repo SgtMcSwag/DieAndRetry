@@ -1381,9 +1381,9 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "Ceci est une aide extr\xE8mement pr\xE9cieuse.\n\nNon, vraiment, ne partez
-    pas sans la lire.\n\nCes collines sont peupl\xE9es de danger.\n\nMais j'ai surtout
-    pas d'id\xE9es.\n\nMerci de votre attention."
+  m_Text: "Il s'agit d'un jeu de vitesse.\n\nLe but est de terminer les diff\xE9rents
+    niveaux\n\nle plus vite possible en limitant ses morts.\n\nLes meilleurs scores
+    sont enregistr\xE9s dans le menu et\n\npeuvent \xEAtre r\xE9initialis\xE9s."
 --- !u!222 &504640108
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1571,6 +1571,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7e8ed97bc1c4725488460b007e8492b8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  masterSlider: {fileID: 1046951333}
+  musicSlider: {fileID: 1034990668}
+  effectsSlider: {fileID: 1032600392}
 --- !u!1 &598410931
 GameObject:
   m_ObjectHideFlags: 0
